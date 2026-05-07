@@ -17,15 +17,25 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@langchain/community": "^1.1.28",
+    "@langchain/core": "^1.1.45",
+    "@langchain/openai": "^1.4.5",
+    "@langchain/qdrant": "^1.0.2",
+    "@qdrant/js-client-rest": "^1.17.0",
+    "langchain": "^1.4.0",
     "next": "^14.2.35",
+    "openai": "^6.36.0",
+    "pdf-parse": "^2.4.5",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.2.4",
     "@types/node": "^25.6.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/uuid": "^10.0.0",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.14",
