@@ -17,14 +17,14 @@ A NotebookLM-style RAG application. Upload PDF or plain-text documents, then cha
 ```
 Browser (React + Tailwind)
   ├── POST /api/upload         ingest: PDFLoader → RecursiveCharacterTextSplitter
-  │                             → OpenAI text-embedding-3-large → Qdrant upsert
+  │                             → Gemini text-embedding-004 → Qdrant upsert
   ├── POST /api/chat           retrieve top-4 chunks (sessionId-filtered)
-  │                             → grounded prompt → gpt-4.1-mini (temp 0.2)
+  │                             → grounded prompt → gemini-2.5-flash (temp 0.2)
   ├── GET  /api/documents      list documents in session
   └── DELETE /api/documents/:id remove a document's chunks
 ```
 
-- **Stack:** Next.js 14 (App Router) + TypeScript, Tailwind, OpenAI, LangChain, Qdrant Cloud, Vercel.
+- **Stack:** Next.js 14 (App Router) + TypeScript, Tailwind, Google Gemini, LangChain, Qdrant Cloud, Vercel.
 - **Sessions:** A `sessionId` cookie scopes which documents are visible. One shared Qdrant collection is filtered by `sessionId` metadata. No accounts, no DB.
 
 ## Chunking strategy
@@ -38,7 +38,7 @@ Browser (React + Tailwind)
 
 ## Grounding strategy
 
-The `gpt-4.1-mini` call uses `temperature: 0.2` and a system prompt that:
+The `gemini-2.5-flash` call uses `temperature: 0.2` and a system prompt that:
 
 1. Restricts the answer to the supplied context only.
 2. Forces the exact phrase `"I couldn't find this in the uploaded document(s)."` when context is insufficient.
@@ -53,7 +53,7 @@ git clone <repo-url>
 cd "Notebook LLM"
 npm install --legacy-peer-deps
 cp .env.example .env.local
-# fill in OPENAI_API_KEY, QDRANT_URL, QDRANT_API_KEY (collection defaults to "notebook-llm")
+# fill in GOOGLE_API_KEY, QDRANT_URL, QDRANT_API_KEY (collection defaults to "notebook-llm")
 npm run dev
 ```
 

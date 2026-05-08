@@ -1,5 +1,5 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { OpenAIEmbeddings } from "@langchain/openai";
+import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { Document } from "@langchain/core/documents";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { writeFile, unlink } from "fs/promises";
@@ -78,7 +78,10 @@ export async function ingestFile(args: {
   if (chunks.length === 0) throw new Error("No content extracted from file");
 
   await ensureCollection();
-  const embeddings = new OpenAIEmbeddings({ model: "text-embedding-3-large" });
+  const embeddings = new GoogleGenerativeAIEmbeddings({
+    model: "text-embedding-004",
+    apiKey: process.env.GOOGLE_API_KEY
+  });
   const vectors = await embeddings.embedDocuments(chunks.map(c => c.pageContent));
 
   const client = getQdrantClient();

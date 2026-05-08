@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import OpenAI from "openai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { getSessionId } from "@/lib/session";
 import { retrieveChunks, formatContext, toCitations } from "@/lib/retrieve";
 import { buildSystemPrompt, NOT_FOUND_MESSAGE } from "@/lib/prompts";
@@ -23,16 +23,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ answer: NOT_FOUND_MESSAGE, citations: [] });
     }
     const context = formatContext(chunks);
-    const client = new OpenAI();
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: buildSystemPrompt(context) },
-        { role: "user", content: question }
-      ]
+
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      systemInstruction: buildSystemPrompt(context),
+      generationConfig: { temperature: 0.2 }
     });
-    const answer = completion.choices[0]?.message?.content ?? NOT_FOUND_MESSAGE;
+    const result = await model.generateContent(question);
+    const answer = result.response.text() || NOT_FOUND_MESSAGE;
     return NextResponse.json({ answer, citations: toCitations(chunks) });
   } catch (e: unknown) {
     console.error(e);

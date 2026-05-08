@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/ashmi/OneDrive/Desktop/Projects'/GenAI/Notebook LLM/**)",
+      "Bash(npm run *)"
+    ]
+  }
+}

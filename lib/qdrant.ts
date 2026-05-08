@@ -1,7 +1,7 @@
 import { QdrantClient } from "@qdrant/js-client-rest";
 
 const COLLECTION = process.env.QDRANT_COLLECTION || "notebook-llm";
-const VECTOR_SIZE = 3072; // text-embedding-3-large
+const VECTOR_SIZE = 768; // gemini text-embedding-004
 
 let cached: QdrantClient | null = null;
 
