@@ -1,5 +1,4 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { Document } from "@langchain/core/documents";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { writeFile, unlink } from "fs/promises";
@@ -7,6 +6,7 @@ import { randomUUID } from "crypto";
 import path from "path";
 import os from "os";
 import { getQdrantClient, getCollectionName, ensureCollection } from "./qdrant";
+import { embedTexts } from "./embeddings";
 import type { ChunkMetadata } from "./types";
 
 const splitter = new RecursiveCharacterTextSplitter({
@@ -20,7 +20,7 @@ export async function chunkText(
   sessionId: string,
   docId: string
 ): Promise<Document<ChunkMetadata>[]> {
-  const pieces = await splitter.splitText(text);
+  const pieces = (await splitter.splitText(text)).filter(p => p.trim().length > 0);
   return pieces.map(
     (content, i) =>
       new Document<ChunkMetadata>({
@@ -46,7 +46,10 @@ async function chunkPdf(
     for (const page of pages) {
       const pageNum =
         (page.metadata as { loc?: { pageNumber?: number } })?.loc?.pageNumber ?? null;
-      const pieces = await splitter.splitText(page.pageContent);
+      if (!page.pageContent || !page.pageContent.trim()) continue;
+      const pieces = (await splitter.splitText(page.pageContent)).filter(
+        p => p.trim().length > 0
+      );
       for (const piece of pieces) {
         out.push(
           new Document<ChunkMetadata>({
@@ -75,24 +78,30 @@ export async function ingestFile(args: {
   } else {
     chunks = await chunkText(args.buffer.toString("utf-8"), args.fileName, args.sessionId, docId);
   }
-  if (chunks.length === 0) throw new Error("No content extracted from file");
+  if (chunks.length === 0) {
+    throw new Error(
+      "No extractable text found. The PDF may be scanned/image-only or empty."
+    );
+  }
 
   await ensureCollection();
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    model: "text-embedding-004",
-    apiKey: process.env.GOOGLE_API_KEY
-  });
-  const vectors = await embeddings.embedDocuments(chunks.map(c => c.pageContent));
+  const vectors = await embedTexts(chunks.map(c => c.pageContent));
+
+  const points = chunks
+    .map((c, i) => ({ chunk: c, vector: vectors[i] }))
+    .filter(p => Array.isArray(p.vector) && p.vector.length > 0)
+    .map(p => ({
+      id: randomUUID(),
+      vector: p.vector,
+      payload: { ...p.chunk.metadata, content: p.chunk.pageContent }
+    }));
+
+  if (points.length === 0) {
+    throw new Error("Embedding produced no valid vectors for the extracted text.");
+  }
 
   const client = getQdrantClient();
-  await client.upsert(getCollectionName(), {
-    wait: true,
-    points: chunks.map((c, i) => ({
-      id: randomUUID(),
-      vector: vectors[i],
-      payload: { ...c.metadata, content: c.pageContent }
-    }))
-  });
+  await client.upsert(getCollectionName(), { wait: true, points });
 
-  return { docId, chunkCount: chunks.length };
+  return { docId, chunkCount: points.length };
 }

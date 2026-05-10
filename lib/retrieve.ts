@@ -1,5 +1,5 @@
-import { GoogleGenerativeAIEmbeddings } from "@langchain/google-genai";
 import { getQdrantClient, getCollectionName } from "./qdrant";
+import { embedQuery } from "./embeddings";
 import type { Citation, ChunkMetadata } from "./types";
 
 export type RetrievedChunk = ChunkMetadata & { content: string; score: number };
@@ -9,11 +9,7 @@ export async function retrieveChunks(
   sessionId: string,
   k = 4
 ): Promise<RetrievedChunk[]> {
-  const embeddings = new GoogleGenerativeAIEmbeddings({
-    model: "text-embedding-004",
-    apiKey: process.env.GOOGLE_API_KEY
-  });
-  const [vector] = await embeddings.embedDocuments([question]);
+  const vector = await embedQuery(question);
   const client = getQdrantClient();
   const result = await client.search(getCollectionName(), {
     vector,
