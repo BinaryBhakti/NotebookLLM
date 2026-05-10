@@ -1,10 +1,6 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { Document } from "@langchain/core/documents";
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { writeFile, unlink } from "fs/promises";
 import { randomUUID } from "crypto";
-import path from "path";
-import os from "os";
 import { getQdrantClient, getCollectionName, ensureCollection } from "./qdrant";
 import { embedTexts } from "./embeddings";
 import type { ChunkMetadata } from "./types";
@@ -36,33 +32,53 @@ async function chunkPdf(
   sessionId: string,
   docId: string
 ): Promise<Document<ChunkMetadata>[]> {
-  const tmpPath = path.join(os.tmpdir(), `${randomUUID()}.pdf`);
-  await writeFile(tmpPath, buffer);
-  try {
-    const loader = new PDFLoader(tmpPath);
-    const pages = await loader.load();
-    const out: Document<ChunkMetadata>[] = [];
-    let chunkIndex = 0;
-    for (const page of pages) {
-      const pageNum =
-        (page.metadata as { loc?: { pageNumber?: number } })?.loc?.pageNumber ?? null;
-      if (!page.pageContent || !page.pageContent.trim()) continue;
-      const pieces = (await splitter.splitText(page.pageContent)).filter(
-        p => p.trim().length > 0
-      );
-      for (const piece of pieces) {
-        out.push(
-          new Document<ChunkMetadata>({
-            pageContent: piece,
-            metadata: { sessionId, docId, fileName, page: pageNum, chunkIndex: chunkIndex++ }
-          })
-        );
-      }
+  // @ts-expect-error - deep import has no types
+  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default as (
+    data: Buffer,
+    opts?: { pagerender?: (pageData: unknown) => Promise<string> }
+  ) => Promise<{ text: string; numpages: number }>;
+
+  const pageTexts: string[] = [];
+  const pagerender = async (pageData: {
+    getTextContent: (opts: {
+      normalizeWhitespace: boolean;
+      disableCombineTextItems: boolean;
+    }) => Promise<{ items: { str: string; transform: number[] }[] }>;
+  }) => {
+    const content = await pageData.getTextContent({
+      normalizeWhitespace: false,
+      disableCombineTextItems: false
+    });
+    let lastY: number | undefined;
+    const parts: string[] = [];
+    for (const item of content.items) {
+      if (lastY === item.transform[5] || lastY === undefined) parts.push(item.str);
+      else parts.push(`\n${item.str}`);
+      lastY = item.transform[5];
     }
-    return out;
-  } finally {
-    await unlink(tmpPath).catch(() => {});
+    const text = parts.join("");
+    pageTexts.push(text);
+    return text;
+  };
+
+  await pdfParse(buffer, { pagerender: pagerender as never });
+
+  const out: Document<ChunkMetadata>[] = [];
+  let chunkIndex = 0;
+  for (let i = 0; i < pageTexts.length; i++) {
+    const pageText = pageTexts[i];
+    if (!pageText || !pageText.trim()) continue;
+    const pieces = (await splitter.splitText(pageText)).filter(p => p.trim().length > 0);
+    for (const piece of pieces) {
+      out.push(
+        new Document<ChunkMetadata>({
+          pageContent: piece,
+          metadata: { sessionId, docId, fileName, page: i + 1, chunkIndex: chunkIndex++ }
+        })
+      );
+    }
   }
+  return out;
 }
 
 export async function ingestFile(args: {
